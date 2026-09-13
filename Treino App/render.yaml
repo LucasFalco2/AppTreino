@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: lucas-falco-training
+    runtime: node
+    buildCommand: npm ci --prefix backend && npm ci --prefix frontend && npm run build --prefix frontend && npx prisma generate --schema=backend/prisma/schema.prisma
+    preDeployCommand: npx prisma migrate deploy --schema=backend/prisma/schema.prisma
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health

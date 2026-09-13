@@ -1,0 +1,484 @@
+// Lucas Falco Training — schema relacional
+// Cobre: users, students, admins, leads, plans, subscriptions, coupons,
+// coupon_usages, workouts, workout_days, exercises, workout_exercises,
+// exercise_videos, workout_logs, progress_records, progress_photos, goals,
+// checkins, meals, meal_items, foods, food_requests, feedbacks,
+// notifications, notification_reads, audit_logs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum PlanCode {
+  TREINO
+  TREINO_ACOMPANHAMENTO
+  TREINO_COMPLETO
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELED
+  EXPIRED
+}
+
+enum DiscountType {
+  PERCENTAGE
+}
+
+enum CouponStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum FoodRequestStatus {
+  PENDING
+  IN_REVIEW
+  REGISTERED
+  REJECTED
+}
+
+enum FeedbackCategory {
+  SUGGESTION
+  BUG
+  WORKOUT_ISSUE
+  APP_ISSUE
+  QUESTION
+  OTHER
+}
+
+enum FeedbackPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum LeadOrigin {
+  SITE
+  INSTAGRAM
+  TIKTOK
+  REFERRAL
+  GOOGLE
+  OTHER
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          Role
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  admin         Admin?
+  student       Student?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  messagesSent Message[] @relation("SentMessages")
+  messagesReceived Message[] @relation("ReceivedMessages")
+  approvedPayments Payment[] @relation("ApprovedPayments")
+}
+
+model Admin {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+}
+
+model Student {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  birthDate   DateTime?
+  gender      String?
+  heightCm    Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  onboardingCompleted Boolean @default(false)
+  objective String?
+  routine String?
+  trainingFrequency Int?
+  nutritionNotes String?
+  currentWeightKg Float?
+  bodyFatPercent Float?
+  muscleMassKg Float?
+  waterPercent Float?
+  caloriesTarget Float?
+  proteinTarget Float?
+  carbsTarget Float?
+  fatTarget Float?
+
+  subscriptions   Subscription[]
+  workouts        Workout[]
+  workoutLogs     WorkoutLog[]
+  progressRecords ProgressRecord[]
+  progressPhotos  ProgressPhoto[]
+  goals           Goal[]
+  checkins        Checkin[]
+  meals           Meal[]
+  feedbacks       Feedback[]
+  foodRequests    FoodRequest[]
+  couponUsages    CouponUsage[]
+  messages        Message[]
+  attendances     WorkoutAttendance[]
+  workoutCompletions WorkoutExerciseCompletion[]
+}
+
+model Lead {
+  id           String     @id @default(uuid())
+  name         String
+  whatsapp     String
+  objective    String?
+  age          Int?
+  gender       String?
+  heightCm     Float?
+  weightKg     Float?
+  origin       LeadOrigin @default(SITE)
+  notes        String?
+  contacted    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+}
+
+model Plan {
+  id          String   @id @default(uuid())
+  code        PlanCode @unique
+  name        String
+  priceCents  Int
+  hasTraining      Boolean @default(true)
+  hasTracking      Boolean @default(false)
+  hasCheckin       Boolean @default(false)
+  hasNutrition     Boolean @default(false)
+  description String?
+  isFeatured  Boolean  @default(false)
+
+  subscriptions Subscription[]
+  coupons       Coupon[]
+  payments      Payment[]
+}
+
+model Subscription {
+  id            String             @id @default(uuid())
+  studentId     String
+  student       Student            @relation(fields: [studentId], references: [id])
+  planId        String
+  plan          Plan               @relation(fields: [planId], references: [id])
+  status        SubscriptionStatus @default(PENDING)
+  startedAt     DateTime?
+  renewsAt      DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  reminderSentAt DateTime?
+}
+
+model Coupon {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  discountType  DiscountType @default(PERCENTAGE)
+  discountValue Int          // ex: 10 = 10%
+  planId        String?      // null = todos os planos
+  plan          Plan?        @relation(fields: [planId], references: [id])
+  startsAt      DateTime
+  expiresAt     DateTime
+  usageLimit    Int?         // null = ilimitado
+  usageCount    Int          @default(0)
+  status        CouponStatus @default(ACTIVE)
+  internalNote  String?
+  createdAt     DateTime     @default(now())
+
+  usages CouponUsage[]
+  payments Payment[]
+}
+
+model CouponUsage {
+  id         String   @id @default(uuid())
+  couponId   String
+  coupon     Coupon   @relation(fields: [couponId], references: [id])
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  usedAt     DateTime @default(now())
+
+  @@unique([couponId, studentId], name: "coupon_student_unique")
+}
+
+model Workout {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id])
+  title     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  days WorkoutDay[]
+}
+
+model WorkoutDay {
+  id         String   @id @default(uuid())
+  workoutId  String
+  workout    Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  weekday    Int      // 0=domingo ... 6=sábado
+  title      String   // ex: "Peito + Tríceps"
+
+  exercises WorkoutExercise[]
+}
+
+model Exercise {
+  id          String  @id @default(uuid())
+  name        String
+  muscleGroup String?
+  instructions String?
+
+  videos           ExerciseVideo[]
+  workoutExercises WorkoutExercise[]
+}
+
+model ExerciseVideo {
+  id         String   @id @default(uuid())
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  url        String   // URL do storage (não armazenar binário no banco)
+  createdAt  DateTime @default(now())
+}
+
+model WorkoutExercise {
+  id            String     @id @default(uuid())
+  workoutDayId  String
+  workoutDay    WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  exerciseId    String
+  exercise      Exercise   @relation(fields: [exerciseId], references: [id])
+  sets          Int
+  reps          String     // ex: "10-12"
+  restSeconds   Int
+  coachNote     String?
+  order         Int        @default(0)
+
+  logs WorkoutLog[]
+  completions WorkoutExerciseCompletion[]
+}
+
+model WorkoutLog {
+  id                String          @id @default(uuid())
+  studentId         String
+  student           Student         @relation(fields: [studentId], references: [id])
+  workoutExerciseId String
+  workoutExercise   WorkoutExercise @relation(fields: [workoutExerciseId], references: [id])
+  loadKg            Float
+  reps              Int
+  note              String?
+  performedAt        DateTime       @default(now())
+}
+
+model WorkoutExerciseCompletion {
+  id                String         @id @default(uuid())
+  studentId         String
+  student           Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workoutExerciseId String
+  workoutExercise   WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+  completedAt       DateTime       @default(now())
+
+  @@unique([studentId, workoutExerciseId], name: "student_workout_exercise_completion")
+}
+
+model ProgressRecord {
+  id         String   @id @default(uuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  weightKg   Float?
+  waistCm    Float?
+  abdomenCm  Float?
+  chestCm    Float?
+  armCm      Float?
+  thighCm    Float?
+  calfCm     Float?
+  skinfoldTriceps Float?
+  skinfoldBiceps Float?
+  skinfoldSubscapular Float?
+  skinfoldSuprailiac Float?
+  skinfoldAbdominal Float?
+  skinfoldThigh Float?
+  skinfoldChest Float?
+  skinfoldAxillaryMidline Float?
+  bodyFatPercent Float?
+  muscleMassKg Float?
+  waterPercent Float?
+  notes      String?
+  recordedAt DateTime @default(now())
+}
+
+model ProgressPhoto {
+  id         String   @id @default(uuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  storageKey String   // chave/URL privada assinada, nunca pública direta
+  takenAt    DateTime @default(now())
+}
+
+model Goal {
+  id           String    @id @default(uuid())
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [id])
+  type         String    // ex: "weight", "load", "frequency", "custom"
+  title        String
+  startValue   Float?
+  currentValue Float?
+  targetValue  Float?
+  unit         String?
+  createdAt    DateTime  @default(now())
+  achievedAt   DateTime?
+}
+
+model Checkin {
+  id                 String   @id @default(uuid())
+  studentId          String
+  student            Student  @relation(fields: [studentId], references: [id])
+  mood               String?
+  energyLevel        String?
+  sleepQuality       String?
+  followingWorkout   Boolean?
+  hasDifficulty      Boolean?
+  hasDiscomfort      Boolean?
+  motivation         String?
+  message            String?
+  status             String   @default("SENT") // SENT | ANSWERED
+  coachReply         String?
+  createdAt          DateTime @default(now())
+  answeredAt         DateTime?
+}
+
+model Food {
+  id            String  @id @default(uuid())
+  name          String
+  brand         String?
+  portion       String
+  unit          String
+  calories      Float
+  protein       Float
+  carbs         Float
+  fat           Float
+  fiber         Float?
+
+  mealItems MealItem[]
+}
+
+model FoodRequest {
+  id          String            @id @default(uuid())
+  studentId   String
+  student     Student           @relation(fields: [studentId], references: [id])
+  name        String
+  brand       String?
+  quantity    String?
+  nutritionInfo String?
+  notes       String?
+  status      FoodRequestStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+}
+
+model Meal {
+  id         String   @id @default(uuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id])
+  category   String   // café da manhã, almoço, etc.
+  date       DateTime @default(now())
+
+  items MealItem[]
+}
+
+model MealItem {
+  id       String @id @default(uuid())
+  mealId   String
+  meal     Meal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  foodId   String
+  food     Food   @relation(fields: [foodId], references: [id])
+  quantity Float  // em unidades da porção do alimento
+}
+
+model Feedback {
+  id          String           @id @default(uuid())
+  studentId   String
+  student     Student          @relation(fields: [studentId], references: [id])
+  category    FeedbackCategory
+  description String
+  priority    FeedbackPriority @default(LOW)
+  response String?
+  respondedAt DateTime?
+  createdAt   DateTime         @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+
+model WorkoutAttendance {
+  id String @id @default(uuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date DateTime @default(now())
+  completedAt DateTime @default(now())
+  @@unique([studentId, date], name: "student_attendance_date")
+}
+
+model Payment {
+  id String @id @default(uuid())
+  name String
+  email String
+  phone String
+  passwordHash String
+  planId String
+  plan Plan @relation(fields: [planId], references: [id])
+  couponId String?
+  coupon Coupon? @relation(fields: [couponId], references: [id])
+  amountCents Int
+  status String @default("PENDING") // PENDING | APPROVED | REJECTED
+  pixPayload String?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  approvedAt DateTime?
+  approvedByUserId String?
+  approvedBy User? @relation("ApprovedPayments", fields: [approvedByUserId], references: [id])
+}
+
+model Message {
+  id String @id @default(uuid())
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  senderUserId String
+  sender User @relation("SentMessages", fields: [senderUserId], references: [id])
+  receiverUserId String
+  receiver User @relation("ReceivedMessages", fields: [receiverUserId], references: [id])
+  body String
+  createdAt DateTime @default(now())
+  readAt DateTime?
+}
+

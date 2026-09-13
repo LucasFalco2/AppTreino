@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.field{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:.5rem;padding:.75rem;font-size:.875rem;outline:none}.field:focus{border-color:#D7FF3F}
+
+.card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:1rem;padding:1.25rem}
+
+.field option,.field optgroup{background:#181818;color:#fff;}
+select.field{color:#fff;color-scheme:dark;}
