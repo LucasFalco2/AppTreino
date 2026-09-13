@@ -72,14 +72,6 @@ app.use("/api/messages", messagesRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/attendance", attendanceRoutes);
 
-if (process.env.NODE_ENV === "production") {
-  const frontendDist = path.join(process.cwd(), "..", "frontend", "dist");
-  app.use(express.static(frontendDist));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) return next();
-    res.sendFile(path.join(frontendDist, "index.html"));
-  });
-}
 
 app.use((req, res) => res.status(404).json({ error: "Rota não encontrada." }));
 app.use(errorHandler);
